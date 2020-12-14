@@ -1,2 +1,5 @@
 # gcs
-Generalized Compressed Storage of multi-dimensional arrays
+GCS - Generalized Compressed Storage of multi-dimensional arrays
+
+
+[Gentle Introduction to GCS format](GentleIntroductionToGCS.md)
