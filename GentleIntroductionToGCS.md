@@ -524,8 +524,6 @@ are encoded into the corresponding element values, for instance, the
 value `112` indicates that the corresponding element index is `(1, 1,
 2)`):
 
-
-
 | Row / Column dimensions   | 2-D reduction array                                 |
 | --- | --- | 
 | `[0]`      / `[1, 2]`     |  `000 001 002 003 010 011 012 013 020 021 022 023`  |
