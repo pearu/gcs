@@ -1,11 +1,12 @@
 """Implementaions of various storage objects for multidimensional arrays:
 
-Buffer - a 1-dimensional contiguous array
+Buffer  - a 1-dimensional contiguous array
 Strided - a multidimensional array with strides
-COO - a multidimensional array using Coordinate format
+COO     - a multidimensional array using Coordinate format
 FlatCOO - a multidimensional array using Coordinate format with flattened indices
-CRS - a 2-dimensional array using Compressed Row Storage format
-GCS - a mulitdimensional array using Generalized Compressed Storage based on dimensionality reduction 
+CRS     - a 2-dimensional array using Compressed Row Storage format
+GCS     - a mulitdimensional array using Generalized Compressed Storage
+          based on dimensionality reduction
 """
 # Author: Pearu Peterson
 # Created: December 2020
@@ -13,6 +14,7 @@ GCS - a mulitdimensional array using Generalized Compressed Storage based on dim
 import itertools
 import math
 import sys
+import warnings
 from . import slice_tools
 
 
@@ -109,6 +111,7 @@ def is_element_index(index, shape):
         return True
     return False
 
+
 def get_unspecified(seq, unspecified=DEFAULT):
     """Return a value that represents unspecified element of a nested
     sequence.
@@ -126,12 +129,6 @@ def get_rposition(index, strides, shape, axis_map):
         return index[axis_map[0]] * strides[0]
     if d == 2:
         return index[axis_map[0]] * strides[0] + index[axis_map[1]] * strides[1]
-    if d == 3:
-        return index[axis_map[0]] * strides[0] + index[axis_map[1]] * strides[1] + index[axis_map[2]] * strides[2]
-    if d == 4:
-        return index[axis_map[0]] * strides[0] + index[axis_map[1]] * strides[1] + index[axis_map[2]] * strides[2] + index[axis_map[3]] * strides[3]
-    if d == 5:
-        return index[axis_map[0]] * strides[0] + index[axis_map[1]] * strides[1] + index[axis_map[2]] * strides[2] + index[axis_map[3]] * strides[3] + index[axis_map[4]] * strides[4]
     return sum(index[axis_map[i]] * strides[i] for i in range(len(shape)))
 
 
@@ -168,24 +165,12 @@ def promote_index(rshapes, rdimensions, rstrides, roffset, rindex):
     return tuple(index)
 
 
-def get_index(pos, shape, strides):
+def get_index(pos, shape, strides, offset=0):
     """Return the index of the original array that corresponds to the
     index (pos) of an one-dimensional dimensionality reduced array.
     """
-    d = len(shape)
-    if d == 0:
-        return ()
-    elif d == 1:
-        return ((pos // strides[0]) % shape[0],)
-    elif d == 2:
-        return ((pos // strides[0]) % shape[0], (pos // strides[1]) % shape[1])
-    elif d == 3:
-        return ((pos // strides[0]) % shape[0], (pos // strides[1]) % shape[1], (pos // strides[2]) % shape[2])
-    elif d == 4:
-        return ((pos // strides[0]) % shape[0], (pos // strides[1]) % shape[1], (pos // strides[2]) % shape[2], (pos // strides[3]) % shape[3])
-    elif d == 5:
-        return ((pos // strides[0]) % shape[0], (pos // strides[1]) % shape[1], (pos // strides[2]) % shape[2], (pos // strides[3]) % shape[3], (pos // strides[4]) % shape[4])
-    return tuple((pos // strides[i]) % shape[i] for i in range(d))
+    warnings.warn('Suggest using slice_tools.solve_index with data rather than get_index')
+    return slice_tools.solve_index(pos, shape, strides)
 
 
 def get_position(index, shape, strides):
@@ -199,12 +184,6 @@ def get_position(index, shape, strides):
         return index[0] * strides[0]
     elif d == 2:
         return index[0] * strides[0] + index[1] * strides[1]
-    elif d == 3:
-        return index[0] * strides[0] + index[1] * strides[1] + index[2] * strides[2]
-    elif d == 4:
-        return index[0] * strides[0] + index[1] * strides[1] + index[2] * strides[2] + index[3] * strides[3]
-    elif d == 5:
-        return index[0] * strides[0] + index[1] * strides[1] + index[2] * strides[2] + index[3] * strides[3] + index[4] * strides[4]
     return sum(index[i] * strides[i] for i in range(d))
 
 
@@ -213,10 +192,9 @@ def get_slice_index(index, shape, strides, slice_shape, slice_strides, slice_off
     index of the original array. Return None if the element of the
     original array is not a part of the sliced array.
     """
-    strided_pos = get_position(index, shape, strides) - slice_offset
-    slice_index = get_index(strided_pos, slice_shape, slice_strides)
-    spos = get_position(slice_index, slice_shape, slice_strides)
-    return slice_index if spos == strided_pos else None
+    warnings.warn('Suggest using slice_tools.solve_index with data')
+    strided_pos = get_position(index, shape, strides)
+    return slice_tools.solve_index(strided_pos - slice_offset, slice_shape, slice_strides)
 
 
 def get_index_slice(slice_index, shape, strides, slice_shape, slice_strides, slice_offset):
@@ -232,19 +210,19 @@ def get_coo_position(index, shape, indices):
     indices, return None.
     """
     # binary search
-    l = 0
-    r = indices.shape[1] - 1
+    left = 0
+    right = indices.shape[1] - 1
     dims = len(shape)
-    while l <= r:
-        pos = (l + r) // 2
+    while left <= right:
+        pos = (left + right) // 2
         for j in range(dims):
             d = indices[j, pos] - index[j]
             if d == 0:
                 continue
             if d < 0:
-                l = pos + 1
+                left = pos + 1
             elif d > 0:
-                r = pos - 1
+                right = pos - 1
             break
         else:
             return pos
@@ -257,18 +235,17 @@ def get_flatcoo_position(findex, shape, findices):
     not in indices, return None.
     """
     # binary search
-    l = 0
-    r = len(findices) - 1
-    dims = len(shape)
-    while l <= r:
-        pos = (l + r) // 2
+    left = 0
+    right = len(findices) - 1
+    while left <= right:
+        pos = (left + right) // 2
         d = findices[pos] - findex
         if d == 0:
             return pos
         if d < 0:
-            l = pos + 1
+            left = pos + 1
         elif d > 0:
-            r = pos - 1
+            right = pos - 1
     # findex is not in findices
     return
 
@@ -279,17 +256,17 @@ def get_crs_position(index, shape, crow_indices, col_indices):
     """
     # binary search
     row, col = index
-    l = crow_indices[row]
-    r = crow_indices[row+1] - 1
-    while l <= r:
-        i = (l + r) // 2
+    left = crow_indices[row]
+    right = crow_indices[row+1] - 1
+    while left <= right:
+        i = (left + right) // 2
         d = col_indices[i] - col
         if d == 0:
             return i
         if d < 0:
-            l = i + 1
+            left = i + 1
         elif d > 0:
-            r = i - 1
+            right = i - 1
     # index is not in indices
     return
 
@@ -365,6 +342,7 @@ class Storage:
         for index, value in other.elements():
             d2[index] = value
         if d1 != d2:
+            print()
             print(f'{d1=}')
             print(f'{d2=}')
         return d1 == d2
@@ -403,17 +381,24 @@ class Storage:
             # Optimal method when the data storage is strided array or
             # when the number of sliced array elements is considerably
             # smaller than of the original array.
-            # Required for slicing CSR/COO formatted arrays that must have indices sorted. 
+            # Required for slicing CSR/COO formatted arrays that must have indices sorted.
+            solve_index_data = slice_tools.get_solve_index_data(self.strides, shape=self.shape)
             for slice_index in itertools.product(*map(range, shape)):
-                index = get_index_slice(slice_index, self.shape, self.strides, shape, strides, offset)
-                data_pos = self.get_data_position(index)  # this is expensive for CSR and COO arrays!
+                spos = get_position(slice_index, shape, strides) + offset
+                index = slice_tools.solve_index(spos, self.shape, self.strides,
+                                                data=solve_index_data)
+                # this is expensive for CSR and COO arrays!
+                data_pos = self.get_data_position(index)
                 yield slice_index, data_pos
         else:
             # Optimal method when the size of sliced array is in the
             # same order of magnitude as the size of the original
             # array
+            solve_index_data = slice_tools.get_solve_index_data(strides, shape=shape)
             for index, data_pos in self.indices_and_data_position():
-                slice_index = get_slice_index(index, self.shape, self.strides, shape, strides, offset)
+                strided_pos = get_position(index, self.shape, self.strides)
+                slice_index = slice_tools.solve_index(strided_pos - offset, shape, strides,
+                                                      data=solve_index_data)
                 if slice_index is not None:
                     yield slice_index, data_pos
 
@@ -454,6 +439,9 @@ class Storage:
     def as_CRS(self, unspecified=DEFAULT):
         return CRS.fromobject(self, unspecified=unspecified)
 
+    def as_C2SR(self, channels=1, unspecified=DEFAULT):
+        return C2SR.fromobject(self, channels=channels, unspecified=unspecified)
+
     def as_GCS(self, dimensions=None, partitioning=None, storage_class=None, unspecified=DEFAULT):
         return GCS.fromobject(
             self, shape=self.shape, dimensions=dimensions,
@@ -468,13 +456,17 @@ class Buffer(Storage):
 
     @classmethod
     def fromobject(cls, seq, shape=None, get_seq_index=None, unspecified=DEFAULT):
-        if isinstance(seq, Buffer) and unspecified is DEFAULT and shape is None and get_seq_index is None:
+        if isinstance(seq, Buffer) and (unspecified is DEFAULT and shape is None
+                                        and get_seq_index is None):
             return seq
         seq_unspecified = get_unspecified(seq)
         if unspecified is DEFAULT:
             unspecified = seq_unspecified
         if get_seq_index is None:
-            get_seq_index = lambda index: index
+
+            def get_seq_index(index):
+                return index
+
         if shape is None:
             shape = get_shape(seq)
         values = []
@@ -485,7 +477,7 @@ class Buffer(Storage):
             values.append(value)
         return cls(len(values), 0, values, unspecified=unspecified)
 
-    def __init__(self, size:int, offset:int, data, unspecified=None):
+    def __init__(self, size: int, offset: int, data, unspecified=None):
         """Parameters
         ----------
         size : int
@@ -511,7 +503,7 @@ class Buffer(Storage):
 
     def _get_object_data(self):
         return self.size, self.offset, self.unspecified
-        
+
     @property
     def unspecified(self):
         return self._unspecified
@@ -535,20 +527,21 @@ class Buffer(Storage):
     def __repr__(self):
         data = str(self.data[self.offset:self.offset+self.size])
         n = self.offset
-        p = "*" * (n//10) + "." * (n % 10)
-        n = len(self.data)-(self.offset+self.size)
-        s = "." * (n%10) + "*" * (n//10)
-        if len(data)>100:
+        p = "*" * (n // 10) + "." * (n % 10)
+        n = len(self.data) - (self.offset + self.size)
+        s = "." * (n % 10) + "*" * (n // 10)
+        if len(data) > 100:
             data = data[:40] + "....." + data[-40:]
-        return (f'{type(self).__name__}({self.size}, {self.offset}, {p}{data}{s}, unspecified={self.unspecified})')
+        return (f'{type(self).__name__}({self.size}, {self.offset},'
+                f' {p}{data}{s}, unspecified={self.unspecified})')
 
     def __eq__(self, other):
         # object equality modulo data and unspecified arbitrariness
         if isinstance(other, type(self)):
             return (self.size == other.size
                     and (self.data[self.offset:self.offset+self.size]
-                         == other.data[other.offset:other.offset+other.size])
-                    and self.unspecified==other.unspecified)
+                         == other.data[other.offset: other.offset + other.size])
+                    and self.unspecified == other.unspecified)
         return NotImplemented
 
     def _get_complete_index(self, index):
@@ -568,13 +561,18 @@ class Buffer(Storage):
             start = self.offset + index.start if index.start is not None else self.offset
             stop = self.offset + index.stop if index.stop is not None else self.offset + self.size
             if start < 0 or start >= len(self.data):
-                raise IndexError(f'{type(self).__name__} start position must be in range({len(self.data)}), got {start}')
+                raise IndexError(
+                    f'{type(self).__name__} start position must be in'
+                    f' range({len(self.data)}), got {start}')
             if stop <= 0 or stop > len(self.data):
-                raise IndexError(f'{type(self).__name__} stop position must be in range(1, {len(self.data)+1}), got {stop}')
+                raise IndexError(
+                    f'{type(self).__name__} stop position must be in '
+                    f'range(1, {len(self.data)+1}), got {stop}')
             s = slice(start, stop, index.step)
             s = slice_tools.reduced(s, len(self.data))
             if s.step != 1:
-                raise IndexError(f'{type(self).__name__} supports slicing with step 1 only, got {s.step}')
+                raise IndexError(
+                    f'{type(self).__name__} supports slicing with step 1 only, got {s.step}')
             size = s.stop - s.start
             return Buffer(size, s.start, self.data, unspecified=self.unspecified)
 
@@ -583,7 +581,7 @@ class Buffer(Storage):
 
     def __setitem__(self, index, value):
         index = self._get_complete_index(index)
-        assert isinstance(index, int), index  ## TODO: slice support
+        assert isinstance(index, int), index  # TODO: slice support
         pos = self.offset + index
         self.data[pos] = value
 
@@ -600,14 +598,16 @@ class Buffer(Storage):
 class Strided(Storage):
     """Represents a multidimensional array with strides.
     """
-    
+
     @classmethod
     def fromobject(cls, seq, shape=None, get_seq_index=None, unspecified=DEFAULT):
-        if isinstance(seq, Strided) and shape is None and get_seq_index is None and unspecified is DEFAULT:
+        if isinstance(seq, Strided) and (shape is None and get_seq_index is None
+                                         and unspecified is DEFAULT):
             return seq
         if shape is None:
             shape = get_shape(seq)
-        data = Buffer.fromobject(seq, shape=shape, get_seq_index=get_seq_index, unspecified=unspecified)
+        data = Buffer.fromobject(seq, shape=shape, get_seq_index=get_seq_index,
+                                 unspecified=unspecified)
         return cls(shape, make_strides(shape), data)
 
     def __init__(self, shape: tuple, strides: tuple, data: Buffer):
@@ -620,7 +620,7 @@ class Strided(Storage):
 
     def _get_object_data(self):
         return self.shape, self.strides, self.data
-        
+
     def copy(self, unspecified=DEFAULT):
         """Return a row-wise contiguous copy.
         """
@@ -657,13 +657,16 @@ class COO(Storage):
     """
     @classmethod
     def fromobject(cls, seq, shape=None, get_seq_index=None, unspecified=DEFAULT):
-        if isinstance(seq, COO) and unspecified is DEFAULT and shape is None and get_seq_index is None:
+        if isinstance(seq, COO) and (unspecified is DEFAULT and shape is None
+                                     and get_seq_index is None):
             return seq
-        if isinstance(seq, FlatCOO) and unspecified is DEFAULT and shape is None and get_seq_index is None:
+        if isinstance(seq, FlatCOO) and (unspecified is DEFAULT and shape is None
+                                         and get_seq_index is None):
             shape = seq.shape
             indices = [[] for d in shape]
+            solve_index_data = slice_tools.get_solve_index_data(seq.strides, shape=shape)
             for findex in seq.findices:
-                index = get_index(findex, shape, seq.strides)
+                index = slice_tools.solve_index(findex, shape, seq.strides, data=solve_index_data)
                 for i in range(len(shape)):
                     indices[i].append(index[i])
             indices = Strided.fromobject(indices)
@@ -675,7 +678,10 @@ class COO(Storage):
         if shape is None:
             shape = get_shape(seq)
         if get_seq_index is None:
-            get_seq_index = lambda index: index
+
+            def get_seq_index(index):
+                return index
+
         indices = [[] for d in shape]
         values = []
         for index in itertools.product(*map(range, shape)):
@@ -691,7 +697,7 @@ class COO(Storage):
         indices = Strided.fromobject(indices)
         return cls(shape, indices, data)
 
-    def __init__(self, shape:tuple, indices:Strided, data:Buffer):
+    def __init__(self, shape: tuple, indices: Strided, data: Buffer):
         assert isinstance(shape, tuple)
         assert isinstance(indices, Strided)
         assert isinstance(data, Buffer)
@@ -705,7 +711,7 @@ class COO(Storage):
         return self.shape, self.indices, self.data
 
     def indices_and_data_position(self):
-        for data_pos in range(self.indices.shape[1]):
+        for data_pos in range(self.size):
             index = tuple(self.indices[j, data_pos] for j in range(self.indices.shape[0]))
             yield index, data_pos
 
@@ -715,7 +721,8 @@ class COO(Storage):
     def get_slice(self, shape, strides, offset):
         values = []
         indices = [[] for d in shape]
-        for slice_index, data_pos in sorted(self.slice_indices_and_data_position(shape, strides, offset)):
+        for slice_index, data_pos in sorted(
+                self.slice_indices_and_data_position(shape, strides, offset)):
             for i in range(len(shape)):
                 indices[i].append(slice_index[i])
             values.append(self.data[data_pos])
@@ -724,7 +731,7 @@ class COO(Storage):
         indices = Strided(indices_shape, make_strides(indices_shape), indices_buffer)
 
         data = Buffer(len(values), 0, values, unspecified=self.unspecified)
-        return COO(shape, indices, data)        
+        return COO(shape, indices, data)
 
 
 class FlatCOO(Storage):
@@ -732,13 +739,15 @@ class FlatCOO(Storage):
     """
     @classmethod
     def fromobject(cls, seq, shape=None, get_seq_index=None, unspecified=DEFAULT):
-        if isinstance(seq, FlatCOO) and unspecified is DEFAULT and shape is None and get_seq_index is None:
+        if isinstance(seq, FlatCOO) and (unspecified is DEFAULT and shape is None
+                                         and get_seq_index is None):
             return seq
-        if isinstance(seq, COO) and shape is None and get_seq_index is None and unspecified is DEFAULT:
+        if isinstance(seq, COO) and (shape is None and get_seq_index is None
+                                     and unspecified is DEFAULT):
             findices = []
             for index, data_pos in seq.indices_and_data_position():
                 findices.append(get_position(index, seq.shape, seq.strides))
-            findices= Buffer(len(findices), 0, findices)
+            findices = Buffer(len(findices), 0, findices)
             return cls(seq.shape, findices, seq.data.copy())
         # TODO: seq is CSR
         seq_unspecified = get_unspecified(seq)
@@ -747,7 +756,10 @@ class FlatCOO(Storage):
         if shape is None:
             shape = get_shape(seq)
         if get_seq_index is None:
-            get_seq_index = lambda index: index
+
+            def get_seq_index(index):
+                return index
+
         strides = make_strides(shape)
         findices = []
         values = []
@@ -761,10 +773,10 @@ class FlatCOO(Storage):
             findices.append(findex)
             values.append(value)
         data = Buffer(len(values), 0, values, unspecified=unspecified)
-        findices= Buffer(len(findices), 0, findices)
+        findices = Buffer(len(findices), 0, findices)
         return cls(shape, findices, data)
 
-    def __init__(self, shape:tuple, findices:Buffer, data:Buffer):
+    def __init__(self, shape: tuple, findices: Buffer, data: Buffer):
         assert isinstance(shape, tuple)
         assert isinstance(findices, Buffer)
         assert isinstance(data, Buffer)
@@ -778,9 +790,11 @@ class FlatCOO(Storage):
         return self.shape, self.findices, self.data
 
     def indices_and_data_position(self):
+        solve_index_data = slice_tools.get_solve_index_data(self.strides, shape=self.shape)
         for data_pos in range(self.size):
             findex = self.findices[data_pos]
-            index = get_index(findex, self.shape, self.strides)
+            index = slice_tools.solve_index(findex, self.shape, self.strides,
+                                            data=solve_index_data)
             yield index, data_pos
 
     def get_data_position(self, index):
@@ -791,7 +805,8 @@ class FlatCOO(Storage):
         findices = []
         values = []
         slice_strides = make_strides(shape)
-        for slice_index, data_pos in sorted(self.slice_indices_and_data_position(shape, strides, offset)):
+        for slice_index, data_pos in sorted(
+                self.slice_indices_and_data_position(shape, strides, offset)):
             findex = get_position(slice_index, shape, slice_strides)
             findices.append(findex)
             values.append(self.data[data_pos])
@@ -806,12 +821,14 @@ class CRS(Storage):
 
     @classmethod
     def fromobject(cls, seq, shape=None, get_seq_index=None, unspecified=DEFAULT):
-        if isinstance(seq, COO) and shape is None and get_seq_index is None and unspecified is DEFAULT:
+        if (isinstance(seq, COO) and (shape is None and get_seq_index is None
+                                      and unspecified is DEFAULT)):
             crow_indices = Buffer.fromobject(compress_indices(seq.indices[0], seq.shape[0]))
             col_indices = Buffer.fromobject(seq.indices[1].copy())
             return CRS(seq.shape, crow_indices, col_indices, seq.data.copy())
         # TODO: seq is FlatCOO
-        return COO.fromobject(seq, shape=shape, get_seq_index=get_seq_index, unspecified=unspecified).as_CRS()
+        return COO.fromobject(seq, shape=shape, get_seq_index=get_seq_index,
+                              unspecified=unspecified).as_CRS()
 
     def __init__(self, shape, crow_indices: Buffer, col_indices: Buffer, data: Buffer):
         """
@@ -859,15 +876,50 @@ class CRS(Storage):
         values = []
         row_indices = []
         col_indices = []
-        for slice_index, data_pos in sorted(self.slice_indices_and_data_position(shape, strides, offset)):
-            row, col = slice_index
+        for (row, col), data_pos in sorted(
+                self.slice_indices_and_data_position(shape, strides, offset)):
             row_indices.append(row)
             col_indices.append(col)
             values.append(self.data[data_pos])
         data = Buffer(len(values), 0, values, unspecified=self.unspecified)
         crow_indices = Buffer.fromobject(compress_indices(row_indices, shape[0]))
         col_indices = Buffer.fromobject(col_indices)
-        return CRS(shape, crow_indices, col_indices, data)        
+        return CRS(shape, crow_indices, col_indices, data)
+
+
+class C2SR(Storage):
+    """Represents a two-dimensional array using C2RS format introduced in
+
+    N. Srivastava, H. Jin, J. Liu, D. Albonesi and Z. Zhang,
+    "MatRaptor: A Sparse-Sparse Matrix Multiplication Accelerator
+    Based on Row-Wise Product," 2020 53rd Annual IEEE/ACM
+    International Symposium on Microarchitecture (MICRO), Athens,
+    Greece, 2020, pp. 766-780, doi: 10.1109/MICRO50266.2020.00068.
+    https://ieeexplore.ieee.org/document/9251978
+    """
+
+    def __init__(self, shape, channels: int, row_lengths: Buffer, row_pointers: Buffer,
+                 col_indices: Buffer, data: Buffer):
+        assert len(shape) == 2
+        assert isinstance(channels, int)
+        assert isinstance(row_lengths, Buffer)
+        assert isinstance(row_pointers, Buffer)
+        assert isinstance(col_indices, Buffer)
+        assert isinstance(data, Buffer)
+        assert row_lengths.size == row_pointers.size
+        assert shape[0] == row_lengths.size
+
+        self.shape = shape
+        self.channels = channels
+        self.row_lengths = row_lengths
+        self.row_pointers = row_pointers
+        self.col_indices = col_indices
+        self.data = data
+        self.size = data.size
+
+    def _get_object_data(self):
+        return (self.shape, self.channels, self.row_lengths, self.row_pointers,
+                self.col_indices, self.data)
 
 
 def make_reduction(shape, rdimensions):
@@ -888,15 +940,16 @@ def make_reduction(shape, rdimensions):
     rstrides = []
     for rdims in rdimensions:
         reduction_shape = tuple(map(shape.__getitem__, rdims))
-        reduction_stride = tuple(product(reduction_shape[i + 1:]) for i in range(len(reduction_shape)))
-        assert make_strides(reduction_shape) == reduction_stride, (make_strides(reduction_shape), reduction_stride)
+        reduction_stride = tuple(product(reduction_shape[i + 1:])
+                                 for i in range(len(reduction_shape)))
+        assert make_strides(reduction_shape) == reduction_stride, (
+            make_strides(reduction_shape), reduction_stride)
         rshape.append(product(reduction_shape))
         rshapes.append(reduction_shape)
         rstrides.append(reduction_stride)
     return tuple(rshape), tuple(rshapes), tuple(rstrides)
 
-    
-    
+
 class GCS(Storage):
     """Generalized Compressed Storage format uses dimensionality reduction
     of multi-dimensional arrays so that N-dimensional array can be
@@ -906,7 +959,8 @@ class GCS(Storage):
     """
 
     @classmethod
-    def fromobject(cls, seq, shape=None, dimensions=None, partitioning=None, storage_class=None, get_seq_index=None, unspecified=DEFAULT):
+    def fromobject(cls, seq, shape=None, dimensions=None, partitioning=None,
+                   storage_class=None, get_seq_index=None, unspecified=DEFAULT):
         """Parameters
         ----------
         seq : sequence
@@ -933,7 +987,7 @@ class GCS(Storage):
 
         if storage_class is None:
             storage_class = Strided
-            
+
         if dimensions is None:
             dimensions = tuple(range(dimensionality))
 
@@ -953,12 +1007,14 @@ class GCS(Storage):
             assert max(partitioning) < dimensionality
 
         if get_seq_index is None:
-            get_seq_index = lambda index: index
+
+            def get_seq_index(index):
+                return index
 
         reduction_dimensionality = len(partitioning) + 1
 
         assert reduction_dimensionality <= dimensionality
-        
+
         partition_positions = (0,) + partitioning + (dimensionality,)
         rdimensions = []
         for k in range(reduction_dimensionality):
@@ -984,7 +1040,8 @@ class GCS(Storage):
             unspecified=unspecified
         )
         storage = storage_class.fromobject(seq, **options)
-        assert len(storage.shape) == reduction_dimensionality, (len(storage.shape), reduction_dimensionality)
+        assert len(storage.shape) == reduction_dimensionality, (
+            len(storage.shape), reduction_dimensionality)
         return cls(shape, tuple(rdimensions), tuple(rstrides), tuple(roffset), storage)
 
     def __init__(self,
@@ -993,8 +1050,9 @@ class GCS(Storage):
                  rstrides: tuple,
                  roffset: tuple,
                  data: Storage):
-        assert set.union(*map(set, rdimensions)) == set(range(len(shape))), (set.union(*map(set, rdimensions)), set(range(len(shape))))
-        
+        assert set.union(*map(set, rdimensions)) == set(range(len(shape))), (
+            set.union(*map(set, rdimensions)), set(range(len(shape))))
+
         rshape, rshapes, _rstrides = make_reduction(shape, rdimensions)
         assert isinstance(shape, tuple)
         assert isinstance(rdimensions, tuple)
@@ -1002,11 +1060,10 @@ class GCS(Storage):
         assert isinstance(rstrides, tuple)
         assert isinstance(roffset, tuple)
         assert isinstance(data, Storage)
-        #assert rstrides == tuple(make_strides(rshape) for rshape in rshapes)
         self.shape = shape
         self.rdimensions = rdimensions
         self.rshapes = rshapes
-        self.rstrides = rstrides 
+        self.rstrides = rstrides
         self.roffset = roffset
         self.data = data
         self.size = data.size
@@ -1016,8 +1073,10 @@ class GCS(Storage):
 
     def indices_and_data_position(self):
         for index in itertools.product(*map(range, self.shape)):
-            rindex = reduce_index(self.rshapes, self.rdimensions, self.rstrides, self.roffset, index)
-            # Notice that rindex ordering does not match the ordering of self.data values in general!
+            rindex = reduce_index(self.rshapes, self.rdimensions, self.rstrides,
+                                  self.roffset, index)
+            # Notice that rindex ordering does not match the ordering
+            # of self.data values in general!
             yield index, rindex
 
     def get_data_position(self, index):
@@ -1048,7 +1107,8 @@ class GCS(Storage):
         rdimensions = ()
         for k in range(len(self.rdimensions)):
             kslice = tuple(index[i] for i in self.rdimensions[k])
-            kshape, kstrides, koffset = slice_tools.index_strided(kslice, self.rshapes[k], self.rstrides[k])
+            kshape, kstrides, koffset = slice_tools.index_strided(
+                kslice, self.rshapes[k], self.rstrides[k])
             if kshape:
                 rshapes += (kshape,)
                 roffset += (self.roffset[k] + koffset,)
