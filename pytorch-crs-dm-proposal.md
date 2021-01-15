@@ -105,7 +105,7 @@ representations:
 ## Additional materials
 
 A pure Python prototype of DM storage format is provided in [GCS
-package](https://github.com/pearu/gcs/gcs) where the dimensions
+package](https://github.com/pearu/gcs/tree/main/gcs) where the dimensions
 mapping and slicing of DM arrays are implemented and demonstrated on
 wrapping of storage arrays using various storage formats like Strided,
 COO, FlatCOO, and CSR. See also [Gentle Introduction To
