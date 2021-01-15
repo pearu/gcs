@@ -61,7 +61,7 @@ provided under the name GCS) where the dimensions mapping and slicing
 of DM arrays are implemented and demonstrated on wrapping of storage
 arrays using various storage formats like Strided, COO, FlatCOO, CRS,
 and CCS. See also [Gentle Introduction To
-GCS](GentleIntroductionToGCS.md0) that exemplifies the dimensions
+GCS](GentleIntroductionToGCS.md) that exemplifies the dimensions
 mapping concepts in more detail.
 
 Execution plan:
@@ -72,7 +72,7 @@ Execution plan:
 - Implement DM storage format in storage array format agnostic way.
 - Implement CCS storage format as a follow up to CRS.
 
-The PyTorch PR 4419 is kept for reference but will be retired
+The PyTorch PR 44190 is kept for reference but will be retired
 eventually.
 
 ## Notations
