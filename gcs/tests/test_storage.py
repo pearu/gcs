@@ -1,6 +1,6 @@
 import pytest
 import itertools
-from gcs.storage import Buffer, Strided, COO, CRS, GCS, FlatCOO
+from gcs.storage import Buffer, Strided, COO, CSR, DM, FlatCOO
 
 
 def test_Buffer():
@@ -237,9 +237,9 @@ def test_FlatCOO():
     assert s[1, 2] == s.unspecified
 
 
-def test_CRS():
-    s = CRS.fromobject([[1, 2, 3], [4, 5, 6]])
-    s2 = CRS((2, 3),
+def test_CSR():
+    s = CSR.fromobject([[1, 2, 3], [4, 5, 6]])
+    s2 = CSR((2, 3),
              Buffer.fromobject([0, 3, 6]),
              Buffer.fromobject([0, 1, 2, 0, 1, 2]),
              Buffer.fromobject([1, 2, 3, 4, 5, 6]))
@@ -286,8 +286,8 @@ def test_CRS():
     assert s[1, 1] == 22
     assert s != s2
 
-    s = CRS.fromobject([[1, None, 3], [None, 5, None]])
-    s2 = CRS((2, 3),
+    s = CSR.fromobject([[1, None, 3], [None, 5, None]])
+    s2 = CSR((2, 3),
              Buffer.fromobject([0, 2, 3]),
              Buffer.fromobject([0, 2, 1]),
              Buffer.fromobject([1, 3, 5]))
@@ -301,8 +301,8 @@ def test_CRS():
     assert s[1, 1] == 5
     assert s[1, 2] == s.unspecified
 
-    s = CRS.fromobject([[1, 0, 3], [0, 5, 0]], unspecified=0)
-    s2 = CRS((2, 3),
+    s = CSR.fromobject([[1, 0, 3], [0, 5, 0]], unspecified=0)
+    s2 = CSR((2, 3),
              Buffer.fromobject([0, 2, 3]),
              Buffer.fromobject([0, 2, 1]),
              Buffer.fromobject([1, 3, 5], unspecified=0))
@@ -322,44 +322,44 @@ def test_conversion():
 
     coo = s.as_COO()
     fcoo = s.as_FlatCOO()
-    crs = s.as_CRS()
+    csr = s.as_CSR()
     assert coo.as_Strided() == s
     assert coo.as_FlatCOO() == fcoo
-    assert coo.as_CRS() == crs
+    assert coo.as_CSR() == csr
     assert fcoo.as_Strided() == s
     assert fcoo.as_COO() == coo
-    assert fcoo.as_CRS() == crs
-    assert crs.as_Strided() == s
-    assert crs.as_COO() == coo
-    assert crs.as_FlatCOO() == fcoo
+    assert fcoo.as_CSR() == csr
+    assert csr.as_Strided() == s
+    assert csr.as_COO() == coo
+    assert csr.as_FlatCOO() == fcoo
 
     s = Strided.fromobject([[1, None, 3], [None, 5, None]])
     coo = s.as_COO()
     fcoo = s.as_FlatCOO()
-    crs = s.as_CRS()
+    csr = s.as_CSR()
     assert coo.as_Strided() == s
     assert coo.as_FlatCOO() == fcoo
-    assert coo.as_CRS() == crs
+    assert coo.as_CSR() == csr
     assert fcoo.as_Strided() == s
     assert fcoo.as_COO() == coo
-    assert fcoo.as_CRS() == crs
-    assert crs.as_Strided() == s
-    assert crs.as_COO() == coo
-    assert crs.as_FlatCOO() == fcoo
+    assert fcoo.as_CSR() == csr
+    assert csr.as_Strided() == s
+    assert csr.as_COO() == coo
+    assert csr.as_FlatCOO() == fcoo
 
     s = Strided.fromobject([[1, 0, 3], [0, 5, 0]])
     coo = s.as_COO(unspecified=0)
     fcoo = s.as_FlatCOO(unspecified=0)
-    crs = s.as_CRS(unspecified=0)
+    csr = s.as_CSR(unspecified=0)
     assert coo.as_Strided() == s.copy(unspecified=0)
     assert coo.as_FlatCOO() == fcoo
-    assert coo.as_CRS() == crs
+    assert coo.as_CSR() == csr
     assert fcoo.as_Strided() == s.copy(unspecified=0)
     assert fcoo.as_COO() == coo
-    assert fcoo.as_CRS() == crs
-    assert crs.as_Strided() == s.copy(unspecified=0)
-    assert crs.as_COO() == coo
-    assert crs.as_FlatCOO() == fcoo
+    assert fcoo.as_CSR() == csr
+    assert csr.as_Strided() == s.copy(unspecified=0)
+    assert csr.as_COO() == coo
+    assert csr.as_FlatCOO() == fcoo
 
 
 def test_elements():
@@ -370,18 +370,18 @@ def test_elements():
     assert list(s.elements()) == elements
     assert list(s.as_COO().elements()) == elements
     assert list(s.as_FlatCOO().elements()) == elements
-    assert list(s.as_CRS().elements()) == elements
-    assert list(s.as_GCS().elements()) == elements
-    assert list(s.as_GCS(storage_class=Strided).elements()) == elements
-    assert list(s.as_GCS(storage_class=COO).elements()) == elements
-    assert list(s.as_GCS(storage_class=FlatCOO).elements()) == elements
-    assert list(s.as_GCS(storage_class=CRS).elements()) == elements
-    assert list(s.as_GCS(storage_class=Buffer).elements()) == elements
+    assert list(s.as_CSR().elements()) == elements
+    assert list(s.as_DM().elements()) == elements
+    assert list(s.as_DM(storage_class=Strided).elements()) == elements
+    assert list(s.as_DM(storage_class=COO).elements()) == elements
+    assert list(s.as_DM(storage_class=FlatCOO).elements()) == elements
+    assert list(s.as_DM(storage_class=CSR).elements()) == elements
+    assert list(s.as_DM(storage_class=Buffer).elements()) == elements
 
 
-@pytest.mark.parametrize("storage_clsname", ['Strided', 'COO', 'FlatCOO', 'CRS'])
+@pytest.mark.parametrize("storage_clsname", ['Strided', 'COO', 'FlatCOO', 'CSR'])
 @pytest.mark.parametrize("reduction", ['2D', '1D', 'T1D'])
-def test_2D_GCS(storage_clsname, reduction):
+def test_2D_DM(storage_clsname, reduction):
     storage_class = eval(storage_clsname)
 
     if reduction == '2D':
@@ -392,8 +392,8 @@ def test_2D_GCS(storage_clsname, reduction):
         dimensions = None
         fromobject = storage_class.fromobject
     elif reduction == '1D':
-        if storage_class is CRS:
-            pytest.skip(f'{reduction}: CRS is for 2D reduction only')
+        if storage_class is CSR:
+            pytest.skip(f'{reduction}: CSR is for 2D reduction only')
         rdimensions = ((0, 1),)
         rstrides = ((3, 1),)
         roffset = (0,)
@@ -408,8 +408,8 @@ def test_2D_GCS(storage_clsname, reduction):
             return storage_class.fromobject(new_seq, unspecified=unspecified)
 
     elif reduction == 'T1D':
-        if storage_class is CRS:
-            pytest.skip(f'{reduction}: CRS is for 2D reduction only')
+        if storage_class is CSR:
+            pytest.skip(f'{reduction}: CSR is for 2D reduction only')
         rdimensions = ((1, 0),)
         rstrides = ((2, 1),)
         roffset = (0,)
@@ -427,9 +427,9 @@ def test_2D_GCS(storage_clsname, reduction):
         raise NotImplementedError(reduction)
 
     seq = [[1, 2, 3], [4, 5, 6]]
-    s = GCS.fromobject(seq, dimensions=dimensions, partitioning=partitioning,
+    s = DM.fromobject(seq, dimensions=dimensions, partitioning=partitioning,
                        storage_class=storage_class)
-    s2 = GCS((2, 3), rdimensions, rstrides, roffset, fromobject(seq))
+    s2 = DM((2, 3), rdimensions, rstrides, roffset, fromobject(seq))
     assert s == s2
 
     assert s[0, 0] == 1
@@ -445,9 +445,9 @@ def test_2D_GCS(storage_clsname, reduction):
     assert s != s2
 
     seq = [[1, None, 3], [None, 5, None]]
-    s = GCS.fromobject(seq, dimensions=dimensions, partitioning=partitioning,
+    s = DM.fromobject(seq, dimensions=dimensions, partitioning=partitioning,
                        storage_class=storage_class)
-    s2 = GCS((2, 3), rdimensions, rstrides, roffset, fromobject(seq))
+    s2 = DM((2, 3), rdimensions, rstrides, roffset, fromobject(seq))
 
     assert s == s2
     assert s.is_full() == issubclass(storage_class, Strided)
@@ -460,9 +460,9 @@ def test_2D_GCS(storage_clsname, reduction):
     assert s[1, 2] == s.unspecified
 
     seq = [[1, 0, 3], [0, 5, 0]]
-    s = GCS.fromobject(seq, dimensions=dimensions, partitioning=partitioning,
+    s = DM.fromobject(seq, dimensions=dimensions, partitioning=partitioning,
                        storage_class=storage_class, unspecified=0)
-    s2 = GCS((2, 3), rdimensions, rstrides, roffset, fromobject(seq, unspecified=0))
+    s2 = DM((2, 3), rdimensions, rstrides, roffset, fromobject(seq, unspecified=0))
     assert s == s2
     assert s.is_full() == issubclass(storage_class, (Buffer, Strided))
 
@@ -494,7 +494,7 @@ def generate_gcs_parameters(N, M):
     if M == 1:
         storage_classes = ('Strided', 'COO', 'FlatCOO', 'Buffer')
     elif M == 2:
-        storage_classes = ('Strided', 'COO', 'FlatCOO', 'CRS')
+        storage_classes = ('Strided', 'COO', 'FlatCOO', 'CSR')
     else:
         storage_classes = ('Strided', 'COO', 'FlatCOO')
     all_permutations = list(itertools.permutations(tuple(range(N))))
@@ -539,7 +539,7 @@ gcs_parameters.extend(generate_gcs_parameters(5, 2))
 
 
 @pytest.mark.parametrize("parameters", gcs_parameters)
-def test_NtoM_GCS(parameters):
+def test_NtoM_DM(parameters):
     storage_clsname, dimensions, partitioning = parameters.split('-')
     dimensions = tuple(map(int, dimensions.split('.')))
     partitioning = tuple(map(int, partitioning.split('.'))) if partitioning else ()
@@ -552,7 +552,7 @@ def test_NtoM_GCS(parameters):
     seq = make_sample(shape)
     sample = Strided.fromobject(seq, shape=shape)
 
-    s = GCS.fromobject(seq, dimensions=dimensions, partitioning=partitioning,
+    s = DM.fromobject(seq, dimensions=dimensions, partitioning=partitioning,
                        storage_class=storage_class)
 
     assert len(s.shape) == N
@@ -561,7 +561,7 @@ def test_NtoM_GCS(parameters):
     assert s.equal(sample)
 
 
-@pytest.mark.parametrize("storage_clsname", ['Strided', 'COO', 'FlatCOO', 'CRS', 'GCS'])
+@pytest.mark.parametrize("storage_clsname", ['Strided', 'COO', 'FlatCOO', 'CSR', 'DM'])
 def test_slicing(storage_clsname):
     storage_class = eval(storage_clsname)
     s = storage_class.fromobject([[1, 2, 3], [4, 5, 6]])
@@ -626,7 +626,7 @@ gcs_parameters.extend(generate_gcs_parameters(5, 2))
 
 
 @pytest.mark.parametrize("parameters", gcs_parameters)
-def test_GCS_slicing(parameters):
+def test_DM_slicing(parameters):
     storage_clsname, dimensions, partitioning = parameters.split('-')
     dimensions = tuple(map(int, dimensions.split('.')))
     partitioning = tuple(map(int, partitioning.split('.'))) if partitioning else ()
@@ -636,7 +636,7 @@ def test_GCS_slicing(parameters):
 
     seq = make_sample(shape)
     strided = Strided.fromobject(seq)
-    s = GCS.fromobject(seq, dimensions=dimensions, partitioning=partitioning,
+    s = DM.fromobject(seq, dimensions=dimensions, partitioning=partitioning,
                        storage_class=storage_class)
     assert strided.equal(s)
     assert s.equal(strided)
@@ -658,7 +658,7 @@ def test_GCS_slicing(parameters):
         for sl1 in make_slice_samples(s.shape[k]):
             sl = (slice(None), ) * k + (sl1,)
             r = s[sl]
-            assert isinstance(r, GCS), r
+            assert isinstance(r, DM), r
             assert strided[sl].equal(r)
             for k2 in selected_dimensions:
                 if k2 <= k:
@@ -667,7 +667,7 @@ def test_GCS_slicing(parameters):
                     sl = (slice(None), ) * k + (sl1,) + (slice(None),) * (k2 - k - 1) + (sl2,)
                     r = s[sl]
                     expected = strided[sl]
-                    if isinstance(r, GCS):
+                    if isinstance(r, DM):
                         assert expected.equal(r)
                     else:
                         assert expected == r, (expected, r, sl)

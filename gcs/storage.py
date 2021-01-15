@@ -4,8 +4,8 @@ Buffer  - a 1-dimensional contiguous array
 Strided - a multidimensional array with strides
 COO     - a multidimensional array using Coordinate format
 FlatCOO - a multidimensional array using Coordinate format with flattened indices
-CRS     - a 2-dimensional array using Compressed Row Storage format
-GCS     - a mulitdimensional array using Generalized Compressed Storage
+CSR     - a 2-dimensional array using Compressed Sparse Row storage format
+DM      - a multidimensional array using Dimensions Mapping storage format
           based on dimensionality reduction
 """
 # Author: Pearu Peterson
@@ -250,8 +250,8 @@ def get_flatcoo_position(findex, shape, findices):
     return
 
 
-def get_crs_position(index, shape, crow_indices, col_indices):
-    """Return the position of index in CRS indices representation. If
+def get_csr_position(index, shape, crow_indices, col_indices):
+    """Return the position of index in CSR indices representation. If
     index is not in indices, return None.
     """
     # binary search
@@ -436,14 +436,14 @@ class Storage:
     def as_FlatCOO(self, unspecified=DEFAULT):
         return FlatCOO.fromobject(self, unspecified=unspecified)
 
-    def as_CRS(self, unspecified=DEFAULT):
-        return CRS.fromobject(self, unspecified=unspecified)
+    def as_CSR(self, unspecified=DEFAULT):
+        return CSR.fromobject(self, unspecified=unspecified)
 
     def as_C2SR(self, channels=1, unspecified=DEFAULT):
         return C2SR.fromobject(self, channels=channels, unspecified=unspecified)
 
-    def as_GCS(self, dimensions=None, partitioning=None, storage_class=None, unspecified=DEFAULT):
-        return GCS.fromobject(
+    def as_DM(self, dimensions=None, partitioning=None, storage_class=None, unspecified=DEFAULT):
+        return DM.fromobject(
             self, shape=self.shape, dimensions=dimensions,
             partitioning=partitioning, storage_class=storage_class,
             unspecified=unspecified)
@@ -815,8 +815,8 @@ class FlatCOO(Storage):
         return FlatCOO(shape, findices, data)
 
 
-class CRS(Storage):
-    """Represents a two-dimensional array using CRS format.
+class CSR(Storage):
+    """Represents a two-dimensional array using CSR format.
     """
 
     @classmethod
@@ -825,10 +825,10 @@ class CRS(Storage):
                                       and unspecified is DEFAULT)):
             crow_indices = Buffer.fromobject(compress_indices(seq.indices[0], seq.shape[0]))
             col_indices = Buffer.fromobject(seq.indices[1].copy())
-            return CRS(seq.shape, crow_indices, col_indices, seq.data.copy())
+            return CSR(seq.shape, crow_indices, col_indices, seq.data.copy())
         # TODO: seq is FlatCOO
         return COO.fromobject(seq, shape=shape, get_seq_index=get_seq_index,
-                              unspecified=unspecified).as_CRS()
+                              unspecified=unspecified).as_CSR()
 
     def __init__(self, shape, crow_indices: Buffer, col_indices: Buffer, data: Buffer):
         """
@@ -866,7 +866,7 @@ class CRS(Storage):
                 yield (row, col), data_pos
 
     def get_data_position(self, index):
-        return get_crs_position(index, self.shape, self.crow_indices, self.col_indices)
+        return get_csr_position(index, self.shape, self.crow_indices, self.col_indices)
 
     def get_slice(self, shape, strides, offset):
         if len(shape) == 1:
@@ -884,7 +884,7 @@ class CRS(Storage):
         data = Buffer(len(values), 0, values, unspecified=self.unspecified)
         crow_indices = Buffer.fromobject(compress_indices(row_indices, shape[0]))
         col_indices = Buffer.fromobject(col_indices)
-        return CRS(shape, crow_indices, col_indices, data)
+        return CSR(shape, crow_indices, col_indices, data)
 
 
 class C2SR(Storage):
@@ -950,12 +950,10 @@ def make_reduction(shape, rdimensions):
     return tuple(rshape), tuple(rshapes), tuple(rstrides)
 
 
-class GCS(Storage):
-    """Generalized Compressed Storage format uses dimensionality reduction
+class DM(Storage):
+    """Dimensions mapping (DM) format uses dimensionality reduction
     of multi-dimensional arrays so that N-dimensional array can be
-    stored using the storage of an M-dimensional array where M <
-    N. The compression effect is achieved when using CRS (M=2) with
-    appropiate dimensions permutation.
+    stored using the storage of an M-dimensional array where M <= N.
     """
 
     @classmethod
@@ -964,7 +962,7 @@ class GCS(Storage):
         """Parameters
         ----------
         seq : sequence
-          Any sequence object that is converted to a GCS storage object
+          Any sequence object that is converted to a DM storage object
 
         dimensions : tuple
           A permutation of dimension indices. Describes swapping axes
@@ -1120,9 +1118,9 @@ class GCS(Storage):
             if t:
                 rdimensions += (t,)
 
-        # Notice that slicing of GCS does not involve access to
+        # Notice that slicing of DM does not involve access to
         # storage data when the sliced array has the same
-        # dimensionality (holds also for COO and CRS use cases) or
+        # dimensionality (holds also for COO and CSR use cases) or
         # when the data storage uses strided storage format.
         data = self.data[dindex] if dindex else self.data
-        return GCS(gshape, rdimensions, rstrides, roffset, data)
+        return DM(gshape, rdimensions, rstrides, roffset, data)
