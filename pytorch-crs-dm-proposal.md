@@ -45,11 +45,12 @@ DM array.
 ## DM storage format
 
 The main feature of the DM storage format is to provide an one-to-one
-mapping between the elements of the "wrapper" array and of the storage
-array when the dimensionalities of the arrays are different.  Such
-mapping of the array elements is realized in between the indices sets
-of the wrapper and storage arrays and can be described in multiple
-ways. Our description of the mapping is as follows:
+mapping between the elements of the *"wrapper"* array and of the
+*"storage"* array when the dimensionalities of the arrays are
+different.  Such mapping of the array elements is realized in between
+the indices sets of the wrapper and storage arrays and can be
+described in multiple ways. Our description of the mapping is as
+follows:
 
 - `shape` parameter is a list of wrapper array dimensions. For
   example, if `shape=(3, 4, 5)` then the wrapper array is a 3D array
@@ -85,18 +86,17 @@ prototype](https://github.com/pearu/gcs/blob/main/gcs/storage.py#L953).
 
 ## Benefits and perspectives
 
-While CSR formats support more performant Linear Algebra operations
+While CSR format supports more performant Linear Algebra operations
 with 2D sparse arrays (see the benchmark results in [PyTorch PR
 44190](https://github.com/pytorch/pytorch/pull/44190) description),
-the DM format provides a method of generalizing the 2D CSR
-formatted arrays to multidimensional arrays. In addition, the DM
-format allows several new perspectives to multidimensional array
-representations:
+the DM format provides a method of generalizing 2D CSR formatted
+arrays to multidimensional arrays. In addition, the DM format allows
+several new perspectives to multidimensional array representation:
 
 - no-copy slicing and axis swapping for COO and CSR/CSS tensors.
 
 - hierarchical storage format: DM tensor can use another DM tensor as
-  the storage array.
+  an storage array.
 
 - extending storage formats with restricted dimensioniality (e.g. the
   CSR format is essentially for 2D arrays only) to arbitrary
